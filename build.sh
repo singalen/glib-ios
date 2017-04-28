@@ -12,7 +12,9 @@ readonly GLIB_VERSION="2.47.1"
 readonly GETTEXT_VERSION="0.19.6"
 readonly ICONV_VERSION="1.14"
 
-readonly ARCHS=(armv7 armv7s arm64 i386 x86_64)
+# There's no MacOS libz.dylib for i386... or is there?..
+# readonly ARCHS=(armv7 armv7s arm64 i386 x86_64)
+readonly ARCHS=(armv7 armv7s arm64 x86_64)
 
 
 
@@ -100,10 +102,8 @@ clean_up_prior_build() {
   is_file "${LOGFILE}" \
     && run "rm -f ${LOGFILE}" "Removing old logfile"
 
-  is_dir "${WORK_DIR}" \
-    && run "rm -rf ${WORK_DIR}" "Removing old work tree"
-
-  mkdir -p "${WORK_DIR}"
+  #is_dir "${WORK_DIR}" \
+  #  && run "rm -rf ${WORK_DIR}" "Removing old work tree"
 }
 
 
@@ -364,6 +364,12 @@ build_glib() {
   for arch in "${ARCHS[@]}"; do
     set_build_env_for_arch ${arch}
 
+    # Otherwise it was clashing with Macports' /opt/local/lib/libz.dylib
+    run "rm -f ${ROOT_DIR}/dependencies/libiconv/fat/lib/libz*.tbd" "Unmocking a libz for $arch"
+    if [[ $arch == arm* ]] ; then
+      run "ln -s $IPHONEOS_SDK/usr/lib/libz*.tbd ${ROOT_DIR}/dependencies/libiconv/fat/lib/" "Mocking a libz"
+    fi
+
     run "env" "Logging environment"
 
     echo "Building glib for $arch"
@@ -375,6 +381,13 @@ build_glib() {
     run "unzip ${glibzip}" "  Unpacking glib"
 
     cd "${glibdir}"
+    
+    # The bug will hapen here: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=822409
+    # in m4macros/glib-gettext.m4, remove the two offending lines, comment out removal & re-unpacking. 
+    # Or probably install a newer pkg-config, 0.29-4+.
+    
+    sed -i .bak 's/m4_copy/#m4_copy/' m4macros/glib-gettext.m4
+
     export NOCONFIGURE=true
     run "./autogen.sh" "  Bootstrapping autoconf for glib"
     unset NOCONFIGURE
@@ -390,7 +403,7 @@ build_glib() {
 EOF
 
     run "${cmd}" "  Configuring glib for ${arch}"
-    run "make -j12" "  Building glib for ${arch}"
+    run "make -j12 V=1" "  Building glib for ${arch}"
 
     run "mkdir -p ${prefix}/${arch}" "  Creating output directory for ${arch}"
     run "make install" "  Installing glib for ${arch} into ${prefix}/${arch}"
@@ -462,13 +475,18 @@ EOF
 
 
 main() {
-  # clean_up_prior_build
+  mkdir -p "${WORK_DIR}"
+  clean_up_prior_build
+
   log "Beginning build"
 
   build_libffi
   build_iconv
   build_gettext
   build_iconv
+
+  export LDFLAGS="-L$IPHONEOS_SDK/usr/lib $LDFLAGS"
+  export LDFLAGS="$LDFLAGS -lz -liconv"
   build_glib
 }
 
