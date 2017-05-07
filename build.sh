@@ -29,12 +29,12 @@ readonly LIPO="$(xcrun --sdk iphoneos -f lipo)"
 readonly IPHONEOS_CC="$(xcrun --sdk iphoneos -f clang)"
 readonly IPHONEOS_CXX="$(xcrun --sdk iphoneos -f clang++)"
 readonly IPHONEOS_SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-readonly IPHONEOS_CFLAGS="-isysroot $IPHONEOS_SDK -miphoneos-version-min=$MIN_IOS_VERSION"
+readonly IPHONEOS_CFLAGS="-isysroot $IPHONEOS_SDK -miphoneos-version-min=$MIN_IOS_VERSION -fembed-bitcode"
 
 readonly IPHONESIM_CC="$(xcrun --sdk iphonesimulator -f clang)"
 readonly IPHONESIM_CXX="$(xcrun --sdk iphonesimulator -f clang++)"
 readonly IPHONESIM_SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
-readonly IPHONESIM_CFLAGS="-isysroot $IPHONESIM_SDK -mios-simulator-version-min=$MIN_IOS_VERSION"
+readonly IPHONESIM_CFLAGS="-isysroot $IPHONESIM_SDK -mios-simulator-version-min=$MIN_IOS_VERSION -fembed-bitcode"
 
 log() {
   local msg=$1
@@ -365,10 +365,17 @@ build_glib() {
     set_build_env_for_arch ${arch}
 
     # Otherwise it was clashing with Macports' /opt/local/lib/libz.dylib
-    run "rm -f ${ROOT_DIR}/dependencies/libiconv/fat/lib/libz*.tbd" "Unmocking a libz for $arch"
+    # Fixme: there should be a way to set this path ahead of /opt/local/lib/. It must be there, but broken somewhy.
+    run "rm -f ${ROOT_DIR}/dependencies/libiconv/fat/lib/libz*.*" "Unmocking a libz for $arch"
     if [[ $arch == arm* ]] ; then
       run "ln -s $IPHONEOS_SDK/usr/lib/libz*.tbd ${ROOT_DIR}/dependencies/libiconv/fat/lib/" "Mocking a libz"
+      #export LDFLAGS="-L$IPHONEOS_SDK/usr/lib $LDFLAGS"
+    else
+      run "ln -s $IPHONESIM_SDK/usr/lib/libz*.* ${ROOT_DIR}/dependencies/libiconv/fat/lib/" "Mocking a libz"
+      #export LDFLAGS="-L$IPHONESIM_SDK/usr/lib $LDFLAGS"
     fi
+    run "ls -la ${ROOT_DIR}/dependencies/libiconv/fat/lib/" "Symlinks must be here:"
+    export LDFLAGS="$LDFLAGS -lz -liconv"
 
     run "env" "Logging environment"
 
@@ -485,8 +492,7 @@ main() {
   build_gettext
   build_iconv
 
-  export LDFLAGS="-L$IPHONEOS_SDK/usr/lib $LDFLAGS"
-  export LDFLAGS="$LDFLAGS -lz -liconv"
+  export LDFLAGS="-L$IPHONEOS_SDK/usr/lib $LDFLAGS -lz -liconv"
   build_glib
 }
 
