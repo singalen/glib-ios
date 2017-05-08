@@ -12,9 +12,7 @@ readonly GLIB_VERSION="2.47.1"
 readonly GETTEXT_VERSION="0.19.6"
 readonly ICONV_VERSION="1.14"
 
-# There's no MacOS libz.dylib for i386... or is there?..
-# readonly ARCHS=(armv7 armv7s arm64 i386 x86_64)
-readonly ARCHS=(armv7 armv7s arm64 x86_64)
+readonly ARCHS=(armv7 armv7s arm64 i386 x86_64)
 
 
 
@@ -490,6 +488,10 @@ main() {
   build_libffi
   build_iconv
   build_gettext
+  rm dependencies/gettext/i386/bin/msgfmt
+  ln -s `which msgfmt` dependencies/gettext/i386/bin
+  rm dependencies/gettext/x86_64/bin/msgfmt
+  ln -s `which msgfmt` dependencies/gettext/x86_64/bin
   build_iconv
 
   export LDFLAGS="-L$IPHONEOS_SDK/usr/lib $LDFLAGS -lz -liconv"
